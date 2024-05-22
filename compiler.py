@@ -18,7 +18,7 @@ def write_token(fd_tok, token_type, token_str, lineno, newline=False):
         return False
     return newline
 
-def write_error(fd_err, lexical_error, lineno, last_err_line):
+def write_lexical_error(fd_err, lexical_error, lineno, last_err_line):
     if lineno != last_err_line:
         if last_err_line != 0:
             fd_err.write('\n')
@@ -50,7 +50,7 @@ def run():
                     newline = write_token(fd_tok, token_type, token_str, scanner.get_lineno(), newline)
             except LexicalError as le:
                 error_found = True
-                write_error(fd_err, le, scanner.get_lineno(), last_err_line)
+                write_lexical_error(fd_err, le, scanner.get_lineno(), last_err_line)
                 last_err_line = scanner.get_lineno()
         write_symbols(fd_sym, scanner.get_lexemes())
         if not error_found:

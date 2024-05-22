@@ -1,6 +1,9 @@
 .vscode/
+.DS_Store
+__MACOSX
 
 __pycache__/
+._*
 
 *.zip
 *.txt

@@ -60,13 +60,14 @@ class Scanner:
         else:
             return Token.ID
 
+    # returns (Token Type, Token Str, EOF)
     def get_next_token(self):
         self._reset()
         while not self.dfa.has_error() and not self.dfa.is_final():
             char = self._next_char()
             if not char:
                 if self.dfa.is_acceptable():
-                    return (None, None, True)
+                    return (Token.DOLLAR, '$', True)
                 self._raise_error(self.buffer)
             self._proceed(char)
         if self.dfa.has_error():
