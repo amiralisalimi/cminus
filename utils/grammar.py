@@ -105,19 +105,21 @@ class Grammar:
         Arg_list_prime = NonTerminal('Arg-list-prime', [Terminal.COMMA, Terminal.EPSILON], [Terminal.CLOSE_PARENTHESIS])
 
         def get_first(self):
-            return self.value.get_first()
+            return tuple(self.value.get_first())
 
         def get_follow(self):
-            return self.value.get_follow()
-        
+            return tuple(self.value.get_follow())
+
         def get_node(self):
             return self.value.get_node()
 
     grammar_tokens = [Token.NUM, Token.ID, Token.KEYWORD, Token.SYMBOL, Token.DOLLAR]
+    keyword_terminals = [Terminal.IF, Terminal.ELSE, Terminal.VOID, Terminal.INT, Terminal.FOR, Terminal.BREAK, Terminal.RETURN, Terminal.ENDIF]
+    symbol_terminals = [Terminal.COLON, Terminal.SEMICOLON, Terminal.OPEN_PARENTHESIS, Terminal.CLOSE_PARENTHESIS, Terminal.OPEN_BRACKET, Terminal.CLOSE_BRACKET, Terminal.OPEN_CURLY_BRACKET, Terminal.CLOSE_CURLY_BRACKET, Terminal.COMMA, Terminal.EQUAL, Terminal.ASSIGN, Terminal.PLUS, Terminal.MINUS, Terminal.MULTIPLY, Terminal.LESS]
 
     rules = {
         States.Program: {
-            (States.Declaration_list.get_first() + States.Program.get_follow()): [States.Declaration_list]
+            States.Declaration_list.get_first() + States.Program.get_follow(): [States.Declaration_list]
         },
         States.Declaration_list: {
             States.Declaration.get_first(): [States.Declaration, States.Declaration_list]
@@ -306,14 +308,14 @@ class Grammar:
     def reset(self):
         self.stack = [self.States.Program]
     
-    def _in_terminal_state(self):
+    def is_terminal_state(self):
         return isinstance(self.get_current_state(), Terminal)
 
     # Assuming given terminal is in FIRST(state)
     def _apply_rule(self, rule):
         for var in reversed(rule):
             self.stack.append(var)
-        if self._in_terminal_state():
+        if self.is_terminal_state():
             self.stack.pop()
 
     def _match(self, terminal):
@@ -324,7 +326,7 @@ class Grammar:
 
     def proceed(self, terminal: Terminal):
         current_state = self.get_current_state()
-        if self._in_terminal_state():
+        if self.is_terminal_state():
             return self._match(terminal)
         for possible_terminals, rule in self.rules[current_state].items():
             if terminal in possible_terminals:
@@ -341,5 +343,6 @@ class Grammar:
             return self.stack[-1]
         return None
 
-
+    def is_final(self):
+        return not self.stack
                         
