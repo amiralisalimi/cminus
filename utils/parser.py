@@ -48,19 +48,20 @@ class Parser:
     def proceed(self):
         if not self.has_missing_symbol_error:
             self.token_type, self.token_str, self.is_eof = self._get_next_token()
-        if self.is_eof:
+        if self.grammar.is_final():
             self.has_reached_eof = True
-            if not self.grammar.is_final():
-                raise UnexpectedEOFError()
             return
         terminal = self._get_terminal_by_token(self.token_type, self.token_str)
         if terminal:
             try:
                 self.has_missing_symbol_error = False
-                self.grammar.proceed(terminal)
+                self.grammar.proceed(terminal, self.token_str)
             except MissingSymbolError as me:
                 self.has_missing_symbol_error = True
                 raise me
 
     def eof_reached(self):
         return self.has_reached_eof
+
+    def get_root_node(self):
+        return self.grammar.get_root_node()

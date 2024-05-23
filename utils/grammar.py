@@ -1,7 +1,7 @@
 from enum import Enum
 from anytree import Node
 from utils.token import Token
-from utils.error import MissingSymbolError, IllegalTerminalError
+from utils.error import MissingSymbolError, IllegalTerminalError, UnexpectedEOFError
 
 class Terminal(Enum):
     ID = 'ID'
@@ -35,18 +35,24 @@ class Terminal(Enum):
 
     DOLLAR = '$'
 
+    def get_name(self, lexeme=None):
+        if self in Grammar.keyword_terminals:
+            return f'(KEYWORD, {self.value})'
+        elif self in Grammar.symbol_terminals:
+            return f'(SYMBOL, {self.value})'
+        elif self in [Terminal.ID, Terminal.NUM]:
+            return f'({self.value}, {lexeme})'
+        else:
+            return self.value
+
 class NonTerminal:
     def __init__(self, name, first, follow):
         self.name = name
         self.first = first
         self.follow = follow
-        self.node = Node(name)
 
     def get_name(self):
         return self.name
-
-    def get_node(self):
-        return self.node
 
     def get_first(self):
         return self.first
@@ -113,9 +119,6 @@ class Grammar:
 
         def get_follow(self):
             return tuple(self.value.get_follow())
-
-        def get_node(self):
-            return self.value.get_node()
 
     grammar_tokens = [Token.NUM, Token.ID, Token.KEYWORD, Token.SYMBOL, Token.DOLLAR]
     keyword_terminals = [Terminal.IF, Terminal.ELSE, Terminal.VOID, Terminal.INT, Terminal.FOR, Terminal.BREAK, Terminal.RETURN, Terminal.ENDIF]
@@ -310,17 +313,21 @@ class Grammar:
         self.reset()
 
     def reset(self):
-        self.stack = [self.States.Program]
-    
+        self.state_stack = [self.States.Program]
+        self.root_node = Node(self.get_current_state().get_name())
+        self.node_stack = [self.root_node]
+
     def is_terminal_state(self, state=None):
         return isinstance(state if state else self.get_current_state(), Terminal)
 
-    # Assuming given terminal is in FIRST(state)
     def _apply(self, rule=None):
-        print(self.stack.pop())
+        self.state_stack.pop()
+        parent_node = self.node_stack.pop()
         if rule:
+            current_node_list = [Node(var.get_name(), parent_node) for var in rule]
             for var in reversed(rule):
-                self.stack.append(var)
+                self.state_stack.append(var)
+            self.node_stack.extend(reversed(current_node_list))
 
     def _match(self, terminal):
         current_state = self.get_current_state()
@@ -329,19 +336,32 @@ class Grammar:
             return True
         raise MissingSymbolError(current_state.value)
 
-    def proceed(self, terminal: Terminal):
+    def proceed(self, terminal: Terminal, lexeme=None):
+        if self.is_final():
+            if terminal == Terminal.DOLLAR:
+                Node(Terminal.DOLLAR.get_name(), self.get_root_node())
+                return True
+            raise UnexpectedEOFError()
         current_state = self.get_current_state()
+        current_node = self.get_current_node()
         if self.is_terminal_state():
-            return self._match(terminal)
+            try:
+                ret_value = self._match(terminal)
+                current_node.name = terminal.get_name(lexeme)
+                return ret_value
+            except MissingSymbolError as me:
+                current_node.parent = None # Remove this node
+                raise me
         for possible_terminals, rule in self.rules[current_state].items():
             if terminal in possible_terminals:
                 self._apply(rule)
-                return self.proceed(terminal)
+                return self.proceed(terminal, lexeme)
         else:
             if Terminal.EPSILON in current_state.get_first() \
                 and terminal in current_state.get_follow():
                 self._apply()
-                return self.proceed(terminal)
+                Node(Terminal.EPSILON.get_name(), current_node)
+                return self.proceed(terminal, lexeme)
             elif terminal in current_state.get_follow():
                 self._apply()
                 raise MissingSymbolError(current_state.get_name())
@@ -349,9 +369,17 @@ class Grammar:
                 raise IllegalTerminalError(terminal.value)
 
     def get_current_state(self):
-        if self.stack:
-            return self.stack[-1]
+        if self.state_stack:
+            return self.state_stack[-1]
+        return None
+
+    def get_current_node(self):
+        if self.node_stack:
+            return self.node_stack[-1]
         return None
 
     def is_final(self):
-        return not self.stack or Terminal.DOLLAR in self.stack[-1].get_follow()
+        return not self.state_stack # or Terminal.DOLLAR in self.state_stack[-1].get_follow()
+
+    def get_root_node(self):
+        return self.root_node

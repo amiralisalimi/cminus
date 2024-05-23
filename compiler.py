@@ -1,7 +1,7 @@
 """
 Amirali Salimi - 400109384
-Mohammad Ali Mirzaei - 400109481
 """
+from anytree import RenderTree
 from utils.scanner import Scanner
 from utils.token import Token
 from utils.error import SyntaxError
@@ -36,9 +36,13 @@ def write_symbols(fd_sym, lexemes):
             fd_sym.write(str(lineno) + '.\t' + lexeme + '\n')
             lineno += 1
 
+def write_parse_tree(fd_ptree, root):
+    for pre, fill, node in RenderTree(root):
+        fd_ptree.write(f'{pre}{node.name}\n')
+
 def run():
     with open('input.txt', 'r') as fd_in, \
-        open('parse_tree.txt', 'w') as fd_ptree, \
+        open('parse_tree.txt', 'w', encoding='utf-8') as fd_ptree, \
         open('syntax_errors.txt', 'w') as fd_serr:
         scanner = Scanner(fd_in)
         parser = Parser(scanner)
@@ -51,6 +55,7 @@ def run():
                 write_syntax_error(fd_serr, se, scanner.get_lineno())
         if not error_found:
             fd_serr.write('There is no syntax error.')
+        write_parse_tree(fd_ptree, parser.get_root_node())
 
 if __name__ == '__main__':
     run()

@@ -8,7 +8,8 @@ class Token(Enum):
     SYMBOL = 4
     COMMENT = 5
     WHITESPACE = 6
-    DOLLAR = 7
+    EPSILON = 7
+    DOLLAR = 8
 
 class Character:
     digits = '0123456789'
