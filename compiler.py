@@ -26,6 +26,9 @@ def write_lexical_error(fd_err, lexical_error, lineno, last_err_line):
         fd_err.write(str(lineno) + '.\t')
     fd_err.write(str(lexical_error) + ' ')
 
+def write_syntax_error(fd_serr, syntax_error, lineno):
+    fd_serr.write(f'#{lineno} : {syntax_error}\n')
+
 def write_symbols(fd_sym, lexemes):
     if len(lexemes):
         lineno = 1
@@ -39,18 +42,13 @@ def run():
         open('syntax_errors.txt', 'w') as fd_serr:
         scanner = Scanner(fd_in)
         parser = Parser(scanner)
-        newline = True
-        last_err_line = 0
         error_found = False
         while not parser.eof_reached():
             try:
-                while parser.proceed():
-                    pass
-                break
-            except SyntaxError as le:
+                parser.proceed()
+            except SyntaxError as se:
                 error_found = True
-                write_lexical_error(fd_serr, le, scanner.get_lineno(), last_err_line)
-                last_err_line = scanner.get_lineno()
+                write_syntax_error(fd_serr, se, scanner.get_lineno())
         if not error_found:
             fd_serr.write('There is no syntax error.')
 

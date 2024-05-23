@@ -23,7 +23,7 @@ class Scanner:
     def _reset(self):
         self.dfa.reset()
         self.buffer = ''
-    
+
     def _raise_error(self, text):
         current_state = self.dfa.get_current_state()
         if current_state == self.dfa.States.TRASH:

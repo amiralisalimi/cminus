@@ -1,6 +1,6 @@
 from utils.scanner import Scanner
 from utils.grammar import Grammar, Terminal
-from utils.error import SyntaxError
+from utils.error import UnexpectedEOFError, MissingSymbolError
 from utils.token import Token
 
 class Parser:
@@ -12,6 +12,7 @@ class Parser:
     def reset(self):
         self.grammar.reset()
         self.has_reached_eof = False
+        self.has_missing_symbol_error = False
 
     def _get_current_state(self):
         return self.grammar.get_current_state()
@@ -45,23 +46,21 @@ class Parser:
             return None
 
     def proceed(self):
-        token_type, token_str, is_eof = self._get_next_token()
-        if is_eof:
+        if not self.has_missing_symbol_error:
+            self.token_type, self.token_str, self.is_eof = self._get_next_token()
+        if self.is_eof:
             self.has_reached_eof = True
             if not self.grammar.is_final():
-                raise SyntaxError('Unexpected EOF')
-            return False
-        terminal = self._get_terminal_by_token(token_type, token_str)
-        success = self.grammar.proceed(terminal)
-        if not success:
-            current_state = self.grammar.get_current_state()
-            if self.grammar.is_terminal_state():
-                raise SyntaxError(f'missing {terminal.value}')
-            elif terminal in current_state.get_follow():
-                raise SyntaxError(f'missing {current_state.name}')
-            else:
-                raise SyntaxError(f'illegal {terminal.value}')
-        return True
+                raise UnexpectedEOFError()
+            return
+        terminal = self._get_terminal_by_token(self.token_type, self.token_str)
+        if terminal:
+            try:
+                self.has_missing_symbol_error = False
+                self.grammar.proceed(terminal)
+            except MissingSymbolError as me:
+                self.has_missing_symbol_error = True
+                raise me
 
     def eof_reached(self):
         return self.has_reached_eof

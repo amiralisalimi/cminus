@@ -16,7 +16,7 @@ class Character:
     lowercase = 'abcdefghijklmnopqrstuvwxyz'
     uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     letters = lowercase + uppercase
-    symbols = ';:,[]()\{\}+-*<=/'
+    symbols = ';:,[]()\{\}+-*<=>/'
 
     keywords =  ['if', 'else', 'void', 'int', 'for', 'break', 'return', 'endif']
 

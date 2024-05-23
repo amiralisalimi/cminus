@@ -1,10 +1,11 @@
 from enum import Enum
 from anytree import Node
 from utils.token import Token
+from utils.error import MissingSymbolError, IllegalTerminalError
 
 class Terminal(Enum):
-    ID = 'id'
-    NUM = 'num'
+    ID = 'ID'
+    NUM = 'NUM'
     EPSILON = 'epsilon'
 
     IF = 'if'
@@ -104,6 +105,9 @@ class Grammar:
         Arg_list = NonTerminal('Arg-list', [Terminal.ID, Terminal.NUM, Terminal.OPEN_PARENTHESIS, Terminal.PLUS, Terminal.MINUS], [Terminal.CLOSE_PARENTHESIS])
         Arg_list_prime = NonTerminal('Arg-list-prime', [Terminal.COMMA, Terminal.EPSILON], [Terminal.CLOSE_PARENTHESIS])
 
+        def get_name(self):
+            return self.value.get_name()
+
         def get_first(self):
             return tuple(self.value.get_first())
 
@@ -202,13 +206,13 @@ class Grammar:
             (Terminal.ID,): [Terminal.ID, States.B]
         },
         States.B: {
-            (Terminal.EQUAL,): [Terminal.EQUAL, States.Expression],
+            (Terminal.ASSIGN,): [Terminal.ASSIGN, States.Expression],
             (Terminal.OPEN_BRACKET,): [Terminal.OPEN_BRACKET, States.Expression, Terminal.CLOSE_BRACKET, States.H],
             (States.Simple_expression_prime.get_first() + States.B.get_follow()): [
                 States.Simple_expression_prime]
         },
         States.H: {
-            (Terminal.EQUAL,): [Terminal.EQUAL, States.Expression],
+            (Terminal.ASSIGN,): [Terminal.ASSIGN, States.Expression],
             (States.G.get_first() + States.D.get_first() + States.C.get_first() + States.H.get_follow()): [
                 States.G, States.D, States.C]
         },
@@ -308,21 +312,22 @@ class Grammar:
     def reset(self):
         self.stack = [self.States.Program]
     
-    def is_terminal_state(self):
-        return isinstance(self.get_current_state(), Terminal)
+    def is_terminal_state(self, state=None):
+        return isinstance(state if state else self.get_current_state(), Terminal)
 
     # Assuming given terminal is in FIRST(state)
-    def _apply_rule(self, rule):
-        for var in reversed(rule):
-            self.stack.append(var)
-        if self.is_terminal_state():
-            self.stack.pop()
+    def _apply(self, rule=None):
+        print(self.stack.pop())
+        if rule:
+            for var in reversed(rule):
+                self.stack.append(var)
 
     def _match(self, terminal):
-        if terminal == self.get_current_state():
-            self.stack.pop()
+        current_state = self.get_current_state()
+        self._apply()
+        if terminal == current_state:
             return True
-        return False
+        raise MissingSymbolError(current_state.value)
 
     def proceed(self, terminal: Terminal):
         current_state = self.get_current_state()
@@ -330,13 +335,18 @@ class Grammar:
             return self._match(terminal)
         for possible_terminals, rule in self.rules[current_state].items():
             if terminal in possible_terminals:
-                self._apply_rule(rule)
-                return True
+                self._apply(rule)
+                return self.proceed(terminal)
         else:
             if Terminal.EPSILON in current_state.get_first() \
                 and terminal in current_state.get_follow():
-                return True
-            return False
+                self._apply()
+                return self.proceed(terminal)
+            elif terminal in current_state.get_follow():
+                self._apply()
+                raise MissingSymbolError(current_state.get_name())
+            else:
+                raise IllegalTerminalError(terminal.value)
 
     def get_current_state(self):
         if self.stack:
@@ -344,5 +354,4 @@ class Grammar:
         return None
 
     def is_final(self):
-        return not self.stack
-                        
+        return not self.stack or Terminal.DOLLAR in self.stack[-1].get_follow()
