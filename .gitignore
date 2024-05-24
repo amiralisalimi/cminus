@@ -3,6 +3,7 @@
 __MACOSX
 
 __pycache__/
+.pytest_cache/
 ._*
 
 *.zip

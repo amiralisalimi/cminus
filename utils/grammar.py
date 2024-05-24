@@ -316,9 +316,24 @@ class Grammar:
         self.state_stack = [self.States.Program]
         self.root_node = Node(self.get_current_state().get_name())
         self.node_stack = [self.root_node]
+        self.has_reached_eof = False
 
     def is_terminal_state(self, state=None):
         return isinstance(state if state else self.get_current_state(), Terminal)
+
+    def _clear_unused_nodes(self, current_node=None):
+        if not current_node:
+            for node in self.node_stack:
+                node.parent = None
+            return
+        while current_node:
+            parent_node = current_node.parent
+            current_node.parent = None
+            if not parent_node.children:
+                current_node = parent_node
+            else:
+                current_node = None
+        return
 
     def _apply(self, rule=None):
         self.state_stack.pop()
@@ -338,10 +353,10 @@ class Grammar:
 
     def proceed(self, terminal: Terminal, lexeme=None):
         if self.is_final():
-            if terminal == Terminal.DOLLAR:
-                Node(Terminal.DOLLAR.get_name(), self.get_root_node())
-                return True
-            raise UnexpectedEOFError()
+            self.has_reached_eof = True
+            Node(Terminal.DOLLAR.get_name(), self.get_root_node())
+            self._clear_unused_nodes()
+            return True
         current_state = self.get_current_state()
         current_node = self.get_current_node()
         if self.is_terminal_state():
@@ -350,7 +365,7 @@ class Grammar:
                 current_node.name = terminal.get_name(lexeme)
                 return ret_value
             except MissingSymbolError as me:
-                current_node.parent = None # Remove this node
+                self._clear_unused_nodes(current_node)
                 raise me
         for possible_terminals, rule in self.rules[current_state].items():
             if terminal in possible_terminals:
@@ -363,8 +378,13 @@ class Grammar:
                 Node(Terminal.EPSILON.get_name(), current_node)
                 return self.proceed(terminal, lexeme)
             elif terminal in current_state.get_follow():
+                self._clear_unused_nodes(current_node)
                 self._apply()
                 raise MissingSymbolError(current_state.get_name())
+            elif terminal == Terminal.DOLLAR:
+                self.has_reached_eof = True
+                self._clear_unused_nodes()
+                raise UnexpectedEOFError()
             else:
                 raise IllegalTerminalError(terminal.value)
 
@@ -379,7 +399,10 @@ class Grammar:
         return None
 
     def is_final(self):
-        return not self.state_stack # or Terminal.DOLLAR in self.state_stack[-1].get_follow()
+        return not self.state_stack
+
+    def eof_reached(self):
+        return self.has_reached_eof
 
     def get_root_node(self):
         return self.root_node
