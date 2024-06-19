@@ -25,26 +25,30 @@ class InvalidNumberError(LexicalError):
 
 
 class SyntaxError(CompileError):
-    msg = 'syntax error'
+    msg = 'Syntax error'
 
     def __str__(self):
         return f'{self.msg}, {self.text}'
 
 class MissingSymbolError(SyntaxError):
-    msg = 'syntax error'
+    msg = 'Syntax error'
 
     def __str__(self):
         return f'{self.msg}, missing {self.text}'
 
 class IllegalTerminalError(SyntaxError):
-    msg = 'syntax error'
+    msg = 'Syntax error'
 
     def __str__(self):
         return f'{self.msg}, illegal {self.text}'
 
 class UnexpectedEOFError(SyntaxError):
-    msg = 'syntax error'
+    msg = 'Syntax error'
     text = 'Unexpected EOF'
 
     def __init__(self):
         super().__init__(self.text)
+
+
+class SemanticError(CompileError):
+    msg = 'Semantic Error'
