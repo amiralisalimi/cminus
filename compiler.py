@@ -29,6 +29,9 @@ def write_lexical_error(fd_err, lexical_error, lineno, last_err_line):
 def write_syntax_error(fd_serr, syntax_error, lineno):
     fd_serr.write(f'#{lineno} : {syntax_error}\n')
 
+def write_semantic_error(fd_smerr, semantic_error, lineno):
+    fd_smerr.write(f'#{lineno} : Semantic Error! {semantic_error}\n')
+
 def write_symbols(fd_sym, lexemes):
     if len(lexemes):
         lineno = 1
@@ -43,7 +46,9 @@ def write_parse_tree(fd_ptree, root):
 def run():
     with open('input.txt', 'r') as fd_in, \
         open('parse_tree.txt', 'w', encoding='utf-8') as fd_ptree, \
-        open('syntax_errors.txt', 'w') as fd_serr:
+        open('syntax_errors.txt', 'w') as fd_serr, \
+        open('output.txt', 'w') as fd_out, \
+        open('semantic_errors.txt', 'w') as fd_smerr:
         scanner = Scanner(fd_in)
         parser = Parser(scanner)
         error_found = False
@@ -57,5 +62,17 @@ def run():
             fd_serr.write('There is no syntax error.')
         write_parse_tree(fd_ptree, parser.get_root_node())
 
+        inter_code = parser.get_pb()
+        counter = 0
+        for three_addr_code in inter_code:
+            fd_out.write(f'{counter}\t({three_addr_code})\n')
+            counter += 1
+
+        semantic_errors = parser.get_semantic_errors()
+        if semantic_errors:
+            for smerr, lineno in semantic_errors:
+                write_semantic_error(fd_smerr, smerr, lineno)
+        else:
+            fd_smerr.write('The input program is semantically correct.')
 if __name__ == '__main__':
     run()

@@ -2,7 +2,7 @@ from enum import Enum
 from anytree import Node
 from utils.token import Token
 from utils.error import MissingSymbolError, IllegalTerminalError, UnexpectedEOFError
-from utils.codegen import ActionSymbol
+from utils.codegen import ActionSymbol, CodeGenerator
 
 class Terminal(Enum):
     ID = 'ID'
@@ -127,7 +127,17 @@ class Grammar:
 
     rules = {
         States.Program: {
-            States.Declaration_list.get_first() + States.Program.get_follow(): [States.Declaration_list]
+            States.Declaration_list.get_first() + States.Program.get_follow(): [
+                ActionSymbol.PUSH_LINENO,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.PUSH_FP_VALUE,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.RETURN_CODE_BLOCK,
+                States.Declaration_list,
+                ActionSymbol.CALL_MAIN,
+            ]
         },
         States.Declaration_list: {
             States.Declaration.get_first(): [States.Declaration, States.Declaration_list]
@@ -136,39 +146,73 @@ class Grammar:
             States.Declaration_initial.get_first(): [States.Declaration_initial, States.Declaration_prime]
         },
         States.Declaration_initial: {
-            States.Type_specifier.get_first(): [ActionSymbol.GET_ID_TYPE, States.Type_specifier, ActionSymbol.PUSH_ID, Terminal.ID]
+            States.Type_specifier.get_first(): [ActionSymbol.PUSH_ID, States.Type_specifier, ActionSymbol.PUSH_ID, Terminal.ID]
         },
         States.Declaration_prime: {
             States.Fun_declaration_prime.get_first(): [States.Fun_declaration_prime],
             States.Var_declaration_prime.get_first(): [States.Var_declaration_prime]
         },
         States.Var_declaration_prime: {
-            (Terminal.SEMICOLON,): [Terminal.SEMICOLON, ActionSymbol.DEFINE_VAR],
-            (Terminal.OPEN_BRACKET,): [Terminal.OPEN_BRACKET, ActionSymbol.PUSH_NUM, Terminal.NUM, Terminal.CLOSE_BRACKET, Terminal.SEMICOLON, ActionSymbol.DEFINE_ARR]
+            (Terminal.SEMICOLON,): [ActionSymbol.DEFINE_INT, Terminal.SEMICOLON],
+            (Terminal.OPEN_BRACKET,): [
+                Terminal.OPEN_BRACKET,
+                ActionSymbol.PUSH_ID,
+                Terminal.NUM,
+                Terminal.CLOSE_BRACKET,
+                ActionSymbol.DEFINE_ARR,
+                Terminal.SEMICOLON
+            ]
         },
         States.Fun_declaration_prime: {
-            (Terminal.OPEN_PARENTHESIS,): [ActionSymbol.START_PARAMS, Terminal.OPEN_PARENTHESIS, States.Params, Terminal.CLOSE_PARENTHESIS, ActionSymbol.CREATE_RECORD, ActionSymbol.NEW_RETURN, States.Compound_stmt, ActionSymbol.END_RETURN, ActionSymbol.RETURN_ANYWAY, ActionSymbol.FINISH_FUNC]
+            (Terminal.OPEN_PARENTHESIS,): [
+                ActionSymbol.REGISTER_FUNC,
+                Terminal.OPEN_PARENTHESIS,
+                States.Params,
+                Terminal.CLOSE_PARENTHESIS,
+                ActionSymbol.BEGIN_FUNC,
+                States.Compound_stmt,
+                ActionSymbol.FUNC_RETURN,
+                ActionSymbol.END_FUNC
+            ]
         },
         States.Type_specifier: {
             (Terminal.INT,): [Terminal.INT],
             (Terminal.VOID,): [Terminal.VOID]
         },
         States.Params: {
-            (Terminal.INT,): [ActionSymbol.GET_ID_TYPE, Terminal.INT, ActionSymbol.PUSH_ID, Terminal.ID, ActionSymbol.DEFINE_VAR, States.Param_prime, States.Param_list],
+            (Terminal.INT,): [
+                ActionSymbol.PUSH_ID,
+                Terminal.INT,
+                ActionSymbol.PUSH_ID,
+                ActionSymbol.ADD_FUNC_PARAM,
+                Terminal.ID,
+                States.Param_prime,
+                States.Param_list
+            ],
             (Terminal.VOID,): [Terminal.VOID]
         },
         States.Param_list: {
-            (Terminal.COMMA,): [Terminal.COMMA, States.Param, ActionSymbol.DEFINE_VAR, States.Param_list]
+            (Terminal.COMMA,): [Terminal.COMMA, States.Param, States.Param_list]
         },
         States.Param: {
-            States.Declaration_initial.get_first(): [States.Declaration_initial, States.Param_prime]
+            States.Declaration_initial.get_first(): [
+                States.Declaration_initial,
+                ActionSymbol.ADD_FUNC_PARAM,
+                States.Param_prime
+            ]
         },
         States.Param_prime: {
-            (Terminal.OPEN_BRACKET,): [ActionSymbol.DEFINE_ARR_ARG, Terminal.OPEN_BRACKET, Terminal.CLOSE_BRACKET]
+            (Terminal.OPEN_BRACKET,): [Terminal.OPEN_BRACKET, Terminal.CLOSE_BRACKET, ActionSymbol.PARAM_TYPE_TO_ARR]
         },
         States.Compound_stmt: {
-            (Terminal.OPEN_CURLY_BRACKET,): [ActionSymbol.PUSH_SCOPE, Terminal.OPEN_CURLY_BRACKET, States.Declaration_list, States.Statement_list,
-                                    Terminal.CLOSE_CURLY_BRACKET, ActionSymbol.POP_SCOPE]
+            (Terminal.OPEN_CURLY_BRACKET,): [
+                Terminal.OPEN_CURLY_BRACKET,
+                ActionSymbol.BEGIN_BLOCK,
+                States.Declaration_list,
+                States.Statement_list,
+                ActionSymbol.END_BLOCK,
+                Terminal.CLOSE_CURLY_BRACKET
+            ]
         },
         States.Statement_list: {
             States.Statement.get_first(): [States.Statement, States.Statement_list]
@@ -181,44 +225,80 @@ class Grammar:
             States.Iteration_stmt.get_first(): [States.Iteration_stmt]
         },
         States.Expression_stmt: {
-            States.Expression.get_first(): [States.Expression, Terminal.SEMICOLON, ActionSymbol.CLEAN_UP],
-            (Terminal.BREAK,): [Terminal.BREAK, Terminal.SEMICOLON, ActionSymbol.BREAK_LOOP],
+            States.Expression.get_first(): [States.Expression, Terminal.SEMICOLON, ActionSymbol.POP_SS],
+            (Terminal.BREAK,): [Terminal.BREAK, ActionSymbol.BREAK_STATEMENT, Terminal.SEMICOLON],
             (Terminal.SEMICOLON,): [Terminal.SEMICOLON]
         },
         States.Selection_stmt: {
-            (Terminal.IF,): [Terminal.IF, Terminal.OPEN_PARENTHESIS, States.Expression, Terminal.CLOSE_PARENTHESIS,
-                                ActionSymbol.SAVE, States.Statement, States.Else_stmt, ActionSymbol.JUMP]
+            (Terminal.IF,): [
+                Terminal.IF,
+                Terminal.OPEN_PARENTHESIS,
+                States.Expression,
+                Terminal.CLOSE_PARENTHESIS,
+                ActionSymbol.POP_STACK,
+                ActionSymbol.PUSH_LINENO,
+                ActionSymbol.SKIP_PB,
+                States.Statement,
+                ActionSymbol.PUSH_LINENO,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.JPF_FROM_SKIPPED2,
+                States.Else_stmt,
+                ActionSymbol.JP_FROM_SKIPPED1
+            ]
         },
         States.Else_stmt: {
             (Terminal.ENDIF,): [Terminal.ENDIF],
-            (Terminal.ELSE,): [Terminal.ELSE, ActionSymbol.JPF_SAVE, States.Statement, Terminal.ENDIF]
+            (Terminal.ELSE,): [Terminal.ELSE, States.Statement, Terminal.ENDIF]
         },
         States.Iteration_stmt: {
-            (Terminal.FOR,): [Terminal.FOR, Terminal.OPEN_PARENTHESIS, States.Expression, ActionSymbol.ASSIGN_JUMP, Terminal.SEMICOLON,
-                                    States.Expression, ActionSymbol.ASSIGN_JUMP, Terminal.SEMICOLON, States.Expression, ActionSymbol.ASSIGN_JUMP, Terminal.CLOSE_PARENTHESIS,
-                                    ActionSymbol.JUMP_FILL_SAVE, ActionSymbol.NEW_BREAK, States.Statement, ActionSymbol.ITER_STMT, ActionSymbol.END_BREAK]
+            (Terminal.FOR,): [
+                Terminal.FOR,
+                Terminal.OPEN_PARENTHESIS,
+                States.Expression,
+                ActionSymbol.POP_SS,
+                Terminal.SEMICOLON,
+                ActionSymbol.PUSH_LINENO,
+                States.Expression,
+                Terminal.SEMICOLON,
+                ActionSymbol.POP_STACK,
+                ActionSymbol.PUSH_LINENO,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.PUSH_LINENO,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.PUSH_LINENO,
+                States.Expression,
+                ActionSymbol.POP_SS,
+                ActionSymbol.JP_TO_SKIPPED4,
+                Terminal.CLOSE_PARENTHESIS,
+                ActionSymbol.JP_FROM_SKIPPED2,
+                ActionSymbol.BEGIN_LOOP,
+                States.Statement,
+                ActionSymbol.JP_TO_SKIPPED1,
+                ActionSymbol.JPF_FROM_SKIPPED1,
+                ActionSymbol.END_LOOP,
+            ]
         },
         States.Return_stmt: {
-            (Terminal.RETURN,): [Terminal.RETURN, States.Return_stmt_prime, ActionSymbol.SAVE_RETURN]
+            (Terminal.RETURN,): [Terminal.RETURN, States.Return_stmt_prime, ActionSymbol.FUNC_RETURN]
         },
         States.Return_stmt_prime: {
-            States.Expression.get_first(): [States.Expression, Terminal.SEMICOLON],
-            (Terminal.SEMICOLON,): [ActionSymbol.PUSH_INDEX, Terminal.SEMICOLON]
+            States.Expression.get_first(): [States.Expression, ActionSymbol.SET_FUNC_RETURN_VALUE, Terminal.SEMICOLON],
+            (Terminal.SEMICOLON,): [Terminal.SEMICOLON]
         },
         States.Expression: {
             States.Simple_expression_zegond.get_first(): [States.Simple_expression_zegond],
-            (Terminal.ID,): [ActionSymbol.PUSH_ID_ADDR, Terminal.ID, States.B]
+            (Terminal.ID,): [ActionSymbol.PUSH_ID, Terminal.ID, States.B]
         },
         States.B: {
-            (Terminal.ASSIGN,): [Terminal.ASSIGN, States.Expression, ActionSymbol.ASSIGN_OPERATION],
-            (Terminal.OPEN_BRACKET,): [Terminal.OPEN_BRACKET, States.Expression, Terminal.CLOSE_BRACKET, ActionSymbol.ARR_INDEX, States.H],
+            (Terminal.ASSIGN,): [Terminal.ASSIGN, States.Expression, ActionSymbol.ASSIGN],
+            (Terminal.OPEN_BRACKET,): [Terminal.OPEN_BRACKET, States.Expression, ActionSymbol.PUSH_ARR_INDEX_ADDR, Terminal.CLOSE_BRACKET, States.H],
             (States.Simple_expression_prime.get_first() + States.B.get_follow()): [
                 States.Simple_expression_prime]
         },
         States.H: {
-            (Terminal.ASSIGN,): [Terminal.ASSIGN, States.Expression, ActionSymbol.ASSIGN_OPERATION],
+            (Terminal.ASSIGN,): [Terminal.ASSIGN, States.Expression, ActionSymbol.ARR_ASSIGN],
             (States.G.get_first() + States.D.get_first() + States.C.get_first() + States.H.get_follow()): [
-                States.G, States.D, States.C]
+                ActionSymbol.PUSH_ADDR_VALUE, States.G, States.D, States.C]
         },
         States.Simple_expression_zegond: {
             States.Additive_expression_zegond.get_first(): [States.Additive_expression_zegond, States.C]
@@ -229,7 +309,7 @@ class Grammar:
                 States.Additive_expression_prime, States.C]
         },
         States.C: {
-            States.Relop.get_first(): [ActionSymbol.PUSH_OPERATOR, States.Relop, States.Additive_expression, ActionSymbol.SAVE_OPERATION]
+            States.Relop.get_first(): [ActionSymbol.PUSH_ID, States.Relop, States.Additive_expression, ActionSymbol.OPERATION]
         },
         States.Relop: {
             (Terminal.LESS,): [Terminal.LESS],
@@ -247,7 +327,7 @@ class Grammar:
             States.Term_zegond.get_first(): [States.Term_zegond, States.D]
         },
         States.D: {
-            States.Addop.get_first(): [ActionSymbol.PUSH_OPERATOR, States.Addop, States.Term, ActionSymbol.SAVE_OPERATION, States.D]
+            States.Addop.get_first(): [ActionSymbol.PUSH_ID, States.Addop, States.Term, ActionSymbol.OPERATION, States.D]
         },
         States.Addop: {
             (Terminal.PLUS,): [Terminal.PLUS],
@@ -264,11 +344,11 @@ class Grammar:
             States.Signed_factor_zegond.get_first(): [States.Signed_factor_zegond, States.G]
         },
         States.G: {
-            (Terminal.MULTIPLY,): [Terminal.MULTIPLY, States.Signed_factor, ActionSymbol.MULT, States.G]
+            (Terminal.MULTIPLY,): [ActionSymbol.PUSH_ID, Terminal.MULTIPLY, States.Signed_factor, ActionSymbol.OPERATION, States.G]
         },
         States.Signed_factor: {
             (Terminal.PLUS,): [Terminal.PLUS, States.Factor],
-            (Terminal.MINUS,): [Terminal.MINUS, States.Factor, ActionSymbol.NEGATE_FACTOR],
+            (Terminal.MINUS,): [Terminal.MINUS, States.Factor, ActionSymbol.NEGATE],
             States.Factor.get_first(): [States.Factor]
         },
         States.Signed_factor_prime: {
@@ -277,30 +357,45 @@ class Grammar:
         },
         States.Signed_factor_zegond: {
             (Terminal.PLUS,): [Terminal.PLUS, States.Factor],
-            (Terminal.MINUS,): [Terminal.MINUS, States.Factor, ActionSymbol.NEGATE_FACTOR],
+            (Terminal.MINUS,): [Terminal.MINUS, States.Factor, ActionSymbol.NEGATE],
             States.Factor_zegond.get_first(): [States.Factor_zegond]
         },
         States.Factor: {
             (Terminal.OPEN_PARENTHESIS,): [Terminal.OPEN_PARENTHESIS, States.Expression, Terminal.CLOSE_PARENTHESIS],
-            (Terminal.ID,): [ActionSymbol.PUSH_ID_ADDR, Terminal.ID, States.Var_call_prime],
-            (Terminal.NUM,): [ActionSymbol.PUSH_NUM, Terminal.NUM]
+            (Terminal.ID,): [ActionSymbol.PUSH_ID, Terminal.ID, States.Var_call_prime],
+            (Terminal.NUM,): [ActionSymbol.PUSH_ID, ActionSymbol.PUSH_STACK, Terminal.NUM]
         },
         States.Var_call_prime: {
-            (Terminal.OPEN_PARENTHESIS,): [Terminal.OPEN_PARENTHESIS, States.Args, ActionSymbol.IMPLICIT_OUTPUT, Terminal.CLOSE_PARENTHESIS, ActionSymbol.CALL_FUNC],
+            (Terminal.OPEN_PARENTHESIS,): [Terminal.OPEN_PARENTHESIS, States.Args, Terminal.CLOSE_PARENTHESIS],
             (States.Var_prime.get_first() + States.Var_call_prime.get_follow()): [States.Var_prime]
         },
         States.Var_prime: {
-            (Terminal.OPEN_BRACKET,): [Terminal.OPEN_BRACKET, States.Expression, Terminal.CLOSE_BRACKET, ActionSymbol.ARR_INDEX]
+            (Terminal.OPEN_BRACKET,): [
+                Terminal.OPEN_BRACKET,
+                States.Expression,
+                ActionSymbol.PUSH_ARR_INDEX_ADDR,
+                Terminal.CLOSE_BRACKET,
+                ActionSymbol.PUSH_ADDR_VALUE,
+            ]
         },
         States.Factor_prime: {
-            (Terminal.OPEN_PARENTHESIS,): [Terminal.OPEN_PARENTHESIS, States.Args, ActionSymbol.IMPLICIT_OUTPUT, Terminal.CLOSE_PARENTHESIS, ActionSymbol.CALL_FUNC]
+            (Terminal.OPEN_PARENTHESIS,): [Terminal.OPEN_PARENTHESIS, States.Args, Terminal.CLOSE_PARENTHESIS]
         },
         States.Factor_zegond: {
             (Terminal.OPEN_PARENTHESIS,): [Terminal.OPEN_PARENTHESIS, States.Expression, Terminal.CLOSE_PARENTHESIS],
-            (Terminal.NUM,): [ActionSymbol.PUSH_NUM, Terminal.NUM]
+            (Terminal.NUM,): [ActionSymbol.PUSH_ID, ActionSymbol.PUSH_STACK, Terminal.NUM]
         },
         States.Args: {
-            States.Arg_list.get_first(): [States.Arg_list]
+            States.Arg_list.get_first(): [
+                ActionSymbol.PUSH_LINENO,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.SKIP_PB,
+                ActionSymbol.PUSH_FP_VALUE,
+                ActionSymbol.BEGIN_ARGS,
+                States.Arg_list,
+                ActionSymbol.CALL_FUNC,
+            ]
         },
         States.Arg_list: {
             States.Expression.get_first(): [States.Expression, States.Arg_list_prime]
@@ -310,7 +405,22 @@ class Grammar:
         }
     }
 
-    def __init__(self):
+    epsilon_rules = {
+        States.Factor_prime: [ActionSymbol.PUSH_STACK],
+        States.Var_prime: [ActionSymbol.PUSH_STACK],
+        States.Args: [
+            ActionSymbol.PUSH_LINENO,
+            ActionSymbol.SKIP_PB,
+            ActionSymbol.SKIP_PB,
+            ActionSymbol.SKIP_PB,
+            ActionSymbol.PUSH_FP_VALUE,
+            ActionSymbol.BEGIN_ARGS,
+            ActionSymbol.CALL_FUNC
+        ]
+    }
+
+    def __init__(self, code_generator : CodeGenerator):
+        self.code_generator = code_generator
         self.reset()
 
     def reset(self):
@@ -321,6 +431,9 @@ class Grammar:
 
     def is_terminal_state(self, state=None):
         return isinstance(state if state else self.get_current_state(), Terminal)
+
+    def is_action_symbol(self, state=None):
+        return isinstance(state if state else self.get_current_state(), ActionSymbol)
 
     def _clear_unused_nodes(self, current_node=None):
         if not current_node:
@@ -352,7 +465,7 @@ class Grammar:
             return True
         raise MissingSymbolError(current_state.value)
 
-    def proceed(self, terminal: Terminal, lexeme=None):
+    def proceed(self, terminal: Terminal, lexeme=None, lineno=None):
         if self.is_final():
             self.has_reached_eof = True
             Node(Terminal.DOLLAR.get_name(), self.get_root_node())
@@ -368,16 +481,23 @@ class Grammar:
             except MissingSymbolError as me:
                 self._clear_unused_nodes(current_node)
                 raise me
+        elif self.is_action_symbol():
+            self.code_generator.code_gen(self.get_current_state().value, lexeme, lineno)
+            self._apply()
+            return self.proceed(terminal, lexeme, lineno)
         for possible_terminals, rule in self.rules[current_state].items():
             if terminal in possible_terminals:
                 self._apply(rule)
-                return self.proceed(terminal, lexeme)
+                return self.proceed(terminal, lexeme, lineno)
         else:
             if Terminal.EPSILON in current_state.get_first() \
                 and terminal in current_state.get_follow():
                 self._apply()
                 Node(Terminal.EPSILON.get_name(), current_node)
-                return self.proceed(terminal, lexeme)
+                if current_state in self.epsilon_rules:
+                    for action in self.epsilon_rules[current_state]:
+                        self.code_generator.code_gen(action.value, None, lineno)
+                return self.proceed(terminal, lexeme, lineno)
             elif terminal in current_state.get_follow():
                 self._clear_unused_nodes(current_node)
                 self._apply()

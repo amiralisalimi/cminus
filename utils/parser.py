@@ -2,11 +2,13 @@ from utils.scanner import Scanner
 from utils.grammar import Grammar, Terminal
 from utils.error import UnexpectedEOFError, MissingSymbolError
 from utils.token import Token
+from utils.codegen import CodeGenerator
 
 class Parser:
     def __init__(self, scanner: Scanner):
         self.scanner = scanner
-        self.grammar = Grammar()
+        self.code_generator = CodeGenerator()
+        self.grammar = Grammar(self.code_generator)
         self.reset()
 
     def reset(self):
@@ -55,7 +57,7 @@ class Parser:
         terminal = self._get_terminal_by_token(self.token_type, self.token_str)
         if terminal:
             try:
-                self.grammar.proceed(terminal, self.token_str)
+                self.grammar.proceed(terminal, self.token_str, self.scanner.get_lineno())
             except MissingSymbolError as me:
                 self.has_missing_symbol_error = True
                 raise me
@@ -68,3 +70,9 @@ class Parser:
 
     def get_root_node(self):
         return self.grammar.get_root_node()
+
+    def get_semantic_errors(self):
+        return self.code_generator.get_semantic_errors()
+    
+    def get_pb(self):
+        return self.code_generator.get_pb()
