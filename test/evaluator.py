@@ -96,7 +96,7 @@ def calc_parse_tree_score(expected: str, actual: str):
         edit_penalty=-1)
 
 
-def calc_syntax_errors_score(expected: str, actual: str):
+def calc_semantic_errors_score(expected: str, actual: str):
     def extract_parts(text: str):
         m = ERROR_PATTERN.match(text)
         result = m.groupdict() if m else {"linenum": -1, "content": text}
@@ -107,3 +107,14 @@ def calc_syntax_errors_score(expected: str, actual: str):
         extract_parts,
         del_penalty=calc_line_content_del_penalty,
         edit_penalty=calc_line_content_edit_penalty)
+
+
+def calc_program_output_score(expected: str, actual: str):
+    def extract_parts(text: str):
+        return text
+
+    return calc_score(
+        expected, actual,
+        extract_parts,
+        del_penalty=-1,
+        edit_penalty=-1)
