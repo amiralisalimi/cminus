@@ -60,7 +60,7 @@ class CodeGenerator:
         self.SS = []
         self.PB = []
         self.global_table = SymbolTable()
-        self.func_table = SymbolTable()
+        self.func_table = None
         self.funcs = {
             'output': ('void', None, [('input', 'int')])
         }
@@ -279,6 +279,7 @@ class CodeGenerator:
             self.add_semantic_error(f'Mismatch in numbers of arguments of \'{func_name}\'.', input_lineno)
         func_param_types = [param[1] for param in func[2]]
         for i in range(len(args)):
+            if i >= len(func[2]): break
             arg = args[i]
             expected = func_param_types[i]
             if arg != expected:
@@ -388,8 +389,8 @@ class CodeGenerator:
 
     def _output(self, pb_lineno):
         self.PB[pb_lineno] = f'ASSIGN, 0, 0, '
-        self.PB[pb_lineno+1] = f'ASSIGN 0, 0, '
-        self.PB[pb_lineno+2] = f'ASSING, 0, 0, '
+        self.PB[pb_lineno+1] = f'ASSIGN, 0, 0, '
+        self.PB[pb_lineno+2] = f'ASSIGN, 0, 0, '
         self.pop_code()
         self.emit(f'PRINT, @{self.SP}, , ')
         self.pop_code()
