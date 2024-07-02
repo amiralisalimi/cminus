@@ -151,7 +151,7 @@ class CodeGenerator:
             if symbol is None:
                 symbol = self.global_table.get_symbol(token)
                 if symbol is None:
-                    self.add_semantic_error(f'\'{token}\' not defined.', input_lineno)
+                    self.add_semantic_error(f'\'{token}\' is not defined.', input_lineno)
                     self.SS.append('int')
                     return
                 else:
